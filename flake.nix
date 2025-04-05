@@ -4,22 +4,20 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    dream2nix.url = "github:nix-community/dream2nix";
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      dream2nix,
       flake-utils,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        eachSystem = nixpkgs.lib.genAttrs [
-          "x86_64-linux"
-        ];
+        supportedSystems = [ "x86_64-linux" ];
+        forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+        pkgsFor = nixpkgs.legacyPackages;
         pkgs = nixpkgs.legacyPackages.${system};
 
         # Read the file relative to the flake's root
@@ -31,23 +29,14 @@
           ];
       in
       {
-        packages = eachSystem (
-          system:
-          dream2nix.lib.importPackages {
-            # All packages defined in ./packages/<name> are automatically added to the flake outputs
-            # e.g., 'packages/hello/default.nix' becomes '.#packages.hello'
-            projectRoot = ./.;
-            # can be changed to ".git" or "flake.nix" to get rid of .project-root
-            projectRootFile = "flake.nix";
-            packagesDir = ./packages;
-            packageSets.nixpkgs = nixpkgs.legacyPackages.${system};
-          }
-        );
+        packages = forAllSystems (system: {
+          default = pkgsFor.${system}.callPackage ./. { };
+        });
+
         devShells.default = pkgs.mkShell rec {
           nativeBuildInputs = with pkgs; [
             rustc
             cargo
-            pkg-config
             lld
             pkg-config
             rust-analyzer
